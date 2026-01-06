@@ -12,7 +12,7 @@ MY_PERSONAL_ID = os.environ.get('CHAT_ID')
 
 # 👇👇👇 آیدی کانال خود را اینجا وارد کنید 👇👇👇
 # مثال: CHANNEL_ID = "@MyChannel"  یا  CHANNEL_ID = "-100123456789"
-CHANNEL_ID = "@ID_KANAL_SHOMA"
+CHANNEL_ID = "@informationbrc"
 
 # لیست گیرندگان (هم شما، هم کانال)
 RECIPIENTS = [MY_PERSONAL_ID, CHANNEL_ID]
@@ -40,7 +40,7 @@ def send_telegram_message(text):
     
     for chat_id in RECIPIENTS:
         # چک می‌کنیم که آیدی خالی نباشد (مثلا اگر آیدی کانال را ننویسید ارور ندهد)
-        if chat_id and chat_id != "@ID_KANAL_SHOMA": 
+        if chat_id and chat_id != "@informationbrc": 
             try:
                 payload = {"chat_id": chat_id, "text": text}
                 requests.post(url, json=payload)
