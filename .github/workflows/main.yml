@@ -1,13 +1,13 @@
-name: Hourly Dollar Bot
+name: Super Dollar Bot
 
 on:
   schedule:
-    # دقیقه 45 از هر ساعت (خیلی دقیق‌تر کار می‌کند)
+    # دقیقه 45 هر ساعت (برای اطمینان از اجرا)
     - cron: '45 * * * *'
   workflow_dispatch:
 
 jobs:
-  build:
+  run-bot:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -18,12 +18,14 @@ jobs:
         with:
           python-version: '3.9'
 
-      - name: Install dependencies
+      - name: Install Libraries
         run: |
           pip install requests
           pip install beautifulsoup4
+          pip install jdatetime
+          pip install pytz
 
-      - name: Run script
+      - name: Run Script
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
