@@ -6,18 +6,26 @@ import jdatetime
 import pytz
 import time
 
-# دریافت توکن و آیدی شخصی از تنظیمات گیت‌هاب
+# ================= تنظیمات اولیه =================
+
+# 1. دریافت توکن و آیدی شخصی از تنظیمات محرمانه گیت‌هاب
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 MY_PERSONAL_ID = os.environ.get('CHAT_ID')
 
-# 👇👇👇 آیدی کانال خود را اینجا وارد کنید 👇👇👇
-# مثال: CHANNEL_ID = "@MyChannel"  یا  CHANNEL_ID = "-100123456789"
-CHANNEL_ID = "@informationbrc"
+# 2. 👇 آیدی کانال خود را دقیقاً اینجا وارد کنید 👇
+# مثال: CHANNEL_ID = "@MyNewsChannel" یا CHANNEL_ID = "-100123456"
+CHANNEL_ID = "@informationbrc"  
 
-# لیست گیرندگان (هم شما، هم کانال)
-RECIPIENTS = [MY_PERSONAL_ID, CHANNEL_ID]
+# 3. لیست هوشمند گیرندگان (حذف تکراری‌ها برای جلوگیری از ارسال دو باره)
+RECIPIENTS = []
+raw_list = [MY_PERSONAL_ID, CHANNEL_ID]
 
-# لیست مواردی که می‌خواهید (نام فارسی + شناسه سایت TGJU)
+for user in raw_list:
+    # شرط‌ها: آیدی خالی نباشد + قبلاً اضافه نشده باشد + متن پیش‌فرض نباشد
+    if user and user not in RECIPIENTS and user != "@informationbrc":
+        RECIPIENTS.append(user)
+
+# لیست مواردی که باید قیمت گرفته شود
 ITEMS = [
     ("دلار آمریکا", "price_dollar_rl"),
     ("دلار کانادا", "price_cad"),
@@ -34,80 +42,100 @@ ITEMS = [
     ("مثقال طلا", "mesghal")
 ]
 
+# ================= توابع برنامه =================
+
 def send_telegram_message(text):
-    """پیام را برای تمام افراد لیست گیرندگان می‌فرستد"""
+    """پیام را به تمام افراد لیست RECIPIENTS می‌فرستد"""
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     
+    if not RECIPIENTS:
+        print("⚠️ لیست گیرندگان خالی است! (آیدی کانال یا Secret را چک کنید)")
+        return
+
     for chat_id in RECIPIENTS:
-        # چک می‌کنیم که آیدی خالی نباشد (مثلا اگر آیدی کانال را ننویسید ارور ندهد)
-        if chat_id and chat_id != "@informationbrc": 
-            try:
-                payload = {"chat_id": chat_id, "text": text}
-                requests.post(url, json=payload)
+        try:
+            payload = {"chat_id": chat_id, "text": text}
+            response = requests.post(url, json=payload)
+            if response.status_code == 200:
                 print(f"✅ پیام ارسال شد به: {chat_id}")
-            except Exception as e:
-                print(f"❌ خطا در ارسال به {chat_id}: {e}")
-        else:
-            if chat_id == "@informationbrc":
-                print("⚠️ هشدار: آیدی کانال را در کد تغییر نداده‌اید!")
+            else:
+                print(f"❌ خطا در ارسال به {chat_id}: {response.text}")
+        except Exception as e:
+            print(f"❌ مشکل ارتباطی با {chat_id}: {e}")
 
 def get_price(slug):
-    """قیمت یک مورد خاص را از سایت می‌گیرد"""
+    """دریافت قیمت از سایت TGJU"""
     url = f"https://www.tgju.org/profile/{slug}"
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0'}
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0.4472.124 Safari/537.36'
+    }
     
     try:
-        response = requests.get(url, headers=headers, timeout=5)
+        response = requests.get(url, headers=headers, timeout=10)
         if response.status_code == 200:
             soup = BeautifulSoup(response.content, 'html.parser')
             
-            # پیدا کردن قیمت
+            # تلاش اول برای پیدا کردن قیمت
             price_tag = soup.find('span', {'data-col': 'info.last_price.PDrCotVal'})
+            
+            # تلاش دوم (اگر کلاس متفاوت بود)
             if not price_tag:
                 price_tag = soup.select_one('.price')
                 
             if price_tag:
                 return price_tag.text.strip()
-    except:
+    except Exception as e:
+        print(f"خطا در دریافت {slug}: {e}")
         pass
+    
     return "---"
 
 def get_persian_date():
-    """تاریخ و ساعت شمسی دقیق"""
-    tz = pytz.timezone('Asia/Tehran')
-    now = jdatetime.datetime.now(tz)
-    
-    weekdays = {
-        0: 'شنبه', 1: 'یکشنبه', 2: 'دوشنبه', 3: 'سه شنبه',
-        4: 'چهارشنبه', 5: 'پنج شنبه', 6: 'جمعه'
-    }
-    months = {
-        1: 'فروردین', 2: 'اردیبهشت', 3: 'خرداد', 4: 'تیر',
-        5: 'مرداد', 6: 'شهریور', 7: 'مهر', 8: 'آبان',
-        9: 'آذر', 10: 'دی', 11: 'بهمن', 12: 'اسفند'
-    }
-    
-    day_name = weekdays[now.weekday()]
-    month_name = months[now.month]
-    
-    return f"{now.strftime('%H:%M')} {day_name} {now.day} {month_name} {now.year}"
+    """تولید تاریخ و ساعت شمسی با فرمت درخواستی"""
+    try:
+        tz = pytz.timezone('Asia/Tehran')
+        now = jdatetime.datetime.now(tz)
+        
+        weekdays = {
+            0: 'شنبه', 1: 'یکشنبه', 2: 'دوشنبه', 3: 'سه شنبه',
+            4: 'چهارشنبه', 5: 'پنج شنبه', 6: 'جمعه'
+        }
+        months = {
+            1: 'فروردین', 2: 'اردیبهشت', 3: 'خرداد', 4: 'تیر',
+            5: 'مرداد', 6: 'شهریور', 7: 'مهر', 8: 'آبان',
+            9: 'آذر', 10: 'دی', 11: 'بهمن', 12: 'اسفند'
+        }
+        
+        day_name = weekdays[now.weekday()]
+        month_name = months[now.month]
+        
+        # خروجی: 15:00 سه شنبه 16 دی 1404
+        return f"{now.strftime('%H:%M')} {day_name} {now.day} {month_name} {now.year}"
+    except:
+        return "تاریخ نامشخص"
+
+# ================= شروع اجرا =================
 
 if __name__ == "__main__":
+    # چک کردن توکن
     if not BOT_TOKEN:
-        print("توکن ربات تنظیم نشده است!")
+        print("🔴 خطا: توکن ربات (BOT_TOKEN) تنظیم نشده است!")
         sys.exit(1)
 
+    print("⏳ در حال دریافت قیمت‌ها...")
     message_lines = []
     
-    # حلقه برای گرفتن قیمت تک تک موارد
+    # حلقه دریافت قیمت‌ها
     for name, slug in ITEMS:
         price = get_price(slug)
         line = f"🔸{name} : {price}"
         message_lines.append(line)
+        # مکث کوتاه برای جلوگیری از مسدود شدن توسط سایت
         time.sleep(0.5)
 
-    # اضافه کردن تاریخ و ساعت در آخر پیام
+    # افزودن تاریخ و ساعت
     date_str = get_persian_date()
     final_message = "\n".join(message_lines) + f"\n\n\n{date_str}"
     
+    # ارسال نهایی
     send_telegram_message(final_message)
